@@ -1,0 +1,91 @@
+from flask import (
+    Blueprint,
+    render_template,
+    request,
+    redirect,
+    url_for,
+    flash,
+    session
+)
+
+from extensions import db
+from models import User
+from werkzeug.security import (
+    generate_password_hash,
+    check_password_hash
+)
+
+# Create Blueprint
+auth_bp = Blueprint("auth", __name__)
+
+
+# Home Page
+@auth_bp.route("/")
+def home():
+    return render_template("index.html")
+
+
+# Register
+@auth_bp.route("/register", methods=["GET", "POST"])
+def register():
+    if request.method == "POST":
+        username = request.form["username"]
+        email = request.form["email"]
+        password = request.form["password"]
+
+        # Check if email already exists
+        existing_user = User.query.filter_by(email=email).first()
+
+        if existing_user:
+            flash("Email already exists!", "danger")
+            return redirect(url_for("auth.register"))
+
+        # Hash the password
+        hashed_password = generate_password_hash(password)
+
+        # Create new user
+        user = User(
+            username=username,
+            email=email,
+            password=hashed_password
+        )
+
+        db.session.add(user)
+        db.session.commit()
+
+        flash("Registration successful! Please login.", "success")
+        return redirect(url_for("auth.login"))
+
+    return render_template("register.html")
+
+
+# Login
+@auth_bp.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        email = request.form["email"]
+        password = request.form["password"]
+
+        # Find user
+        user = User.query.filter_by(email=email).first()
+
+        # Verify password
+        if user and check_password_hash(user.password, password):
+            session["user_id"] = user.id
+            session["username"] = user.username
+
+            flash("Login successful!", "success")
+            return redirect(url_for("notes.dashboard"))
+
+        flash("Invalid email or password!", "danger")
+
+    return render_template("login.html")
+
+
+# Logout
+@auth_bp.route("/logout")
+def logout():
+    session.clear()   # Remove all session data
+
+    flash("Logged out successfully!", "success")
+    return redirect(url_for("auth.login"))
